@@ -1,0 +1,92 @@
+{
+  "0101": {
+    "name": "Potion Bottle",
+    "description": "Build a magic potion bottle by combining basic geometric shapes, manipulating vector paths, and organizing layers into a functional frame.",
+    "link": "https://docs.google.com/document/d/1PRcK1h1W6ZbVd2kEB0p39Y0aVfwPL2kYWr5Wbm3yIVw/edit?tab=t.0101"
+  },
+  "0102": {
+    "name": "Create a Loading Animation in Figma",
+    "description": "Create a reusable loading animation in Figma using frames, ellipses, Smart Animate, prototype connections, and component variants. The animation should loop through multiple loading states and be usable as an instance inside a mobile app screen.",
+    "link": "https://docs.google.com/document/d/1PRcK1h1W6ZbVd2kEB0p39Y0aVfwPL2kYWr5Wbm3yIVw/edit?tab=t.l1bqvvegqkl#heading=h.8ros06qtkcgb"
+  },
+  "0104": {
+    "name": "Create a Responsive Card in Figma",
+    "description": "Build a responsive podcast episode card in Figma using shape tools, image fills, text layers, Auto Layout, constraints, and components. The card should adapt to different sizes while keeping the album art, play button, and metadata visually organized.",
+    "link": "https://docs.google.com/document/d/1PRcK1h1W6ZbVd2kEB0p39Y0aVfwPL2kYWr5Wbm3yIVw/edit?tab=t.vplv8mxv2u6l#heading=h.2urs60r0anf9"
+  },
+  "0105": {
+    "name": "Illustrate a Flower Vase in Figma",
+    "description": "Create a transparent glass vase, design a flower from repeated petal shapes, and place curved stems inside the vase.",
+    "link": "https://docs.google.com/document/d/1PRcK1h1W6ZbVd2kEB0p39Y0aVfwPL2kYWr5Wbm3yIVw/edit?tab=t.pohvi7puzatz#heading=h.2urs60r0anf9"
+  },
+  "0201": {
+  "name": "Make a Base Donut Mesh with Icing in Blender",
+  "description": "Create a base donut model with icing in Blender from an empty file. Use basic viewport navigation, mesh primitives, Edit Mode, modifiers, and Sculpt Mode to build an organic donut shape and a separate icing mesh with dripping details.",
+    "link": "https://docs.google.com/document/d/1CCvypDZLnyRZ_4m30oCFK-I_6FVnaOmWbPAmWwayRTw/edit?tab=t.0201"
+  },
+  "0202": {
+    "name": "Assign Materials to a Donut Model in Blender",
+    "description": "Assign basic materials to an existing donut model in Blender. Starting from a modeled donut with icing, create separate materials for the donut and icing, apply them to the correct objects, and switch to Shading view to preview the result.",
+    "link": "https://docs.google.com/document/d/1CCvypDZLnyRZ_4m30oCFK-I_6FVnaOmWbPAmWwayRTw/edit?tab=t.jqgrow434mkn#heading=h.2urs60r0anf9"
+  },
+  "0203": {
+    "name": "Add a Falling Animation to a Donut in Blender",
+    "description": "Animate an existing donut model in Blender so it falls downward along the Z axis.",
+    "link": "https://docs.google.com/document/d/1CCvypDZLnyRZ_4m30oCFK-I_6FVnaOmWbPAmWwayRTw/edit?tab=t.dmdv88aarkdy#heading=h.2urs60r0anf9"
+  },
+  "0204": {
+    "name": "Add Sprinkles to Donut Icing in Blender",
+    "description": "Add sprinkles to an existing donut model in Blender using procedural generation.",
+    "link": "https://docs.google.com/document/d/1CCvypDZLnyRZ_4m30oCFK-I_6FVnaOmWbPAmWwayRTw/edit?tab=t.dhnxqqemc7e6#heading=h.2urs60r0anf9"
+  },
+  "0301": {
+    "name": "Create a Saddle Bracket in Onshape",
+    "description": "Model a saddle bracket in Onshape from the provided drawing. Start the base sketch on the Top plane, create the main bracket shape, add the center hole, and cut the semicircular saddles on the two upright sides. The part should match the given dimensions and thickness.",
+    "link": "https://docs.google.com/document/d/1Ghw6CAkTINagekHk-J9RBtjkASBGO8nUkz4ayv22_SY/edit?tab=t.0301"
+  },
+  "0302": {
+    "name": "Create a Geneva Cam in Onshape",
+    "description": "Model a Geneva cam part in Onshape based on the provided engineering drawing. Start the base sketch on the Front plane with the part center at the origin. Use sketch geometry and circular repetition to define the outer profile, radial slots, and center hub, then build the 3D form with extrusion and feature patterning. The model should follow the specified dimensions and section profile shown in the drawing.",
+    "link": "https://docs.google.com/document/d/1Ghw6CAkTINagekHk-J9RBtjkASBGO8nUkz4ayv22_SY/edit?tab=t.wp935m10ozb1#heading=h.2urs60r0anf9"
+  },
+  "0303": {
+    "name": "Create a Hub in Onshape",
+    "description": "Model a hub in Onshape from the provided engineering drawing. Build the revolved base profile from the section view, then add the repeated curved slots on the flange face. The part should match the given diameters, lengths, and angular spacing.",
+    "link": "https://docs.google.com/document/d/1Ghw6CAkTINagekHk-J9RBtjkASBGO8nUkz4ayv22_SY/edit?tab=t.5tn4s6kci9dg#heading=h.2urs60r0anf9"
+  },
+  "0401": {
+    "name": "Make a Beat",
+    "description": "Create a basic beat using FL Studio's Channel Rack and pattern-based workflow. The task introduces how to browse and add sounds, build a drum pattern, adjust channel organization and mix settings, create a longer pattern, add a bass line, and arrange patterns in the Playlist.",
+    "link": "https://docs.google.com/document/d/1UGm-IrFxN3iDIxxbm5gR0fYtc5-nuKE3hDTCOOw02Mo/edit?tab=t.0#heading=h.2urs60r0anf9"
+  },
+  "0402": {
+    "name": "Create a Melody in FL Studio Piano Roll",
+    "description": "Create a melody in FL Studio using the Piano Roll. The task introduces how to add an instrument, enter and edit notes, shape note timing and dynamics, organize the melody into its own pattern, and place it into the Playlist arrangement.",
+    "link": "https://docs.google.com/document/d/1UGm-IrFxN3iDIxxbm5gR0fYtc5-nuKE3hDTCOOw02Mo/edit?tab=t.9y51ztri1xs#heading=h.2urs60r0anf9"
+  },
+  "0403": {
+    "name": "Arrange a Track in FL Studio Playlist",
+    "description": "The task introduces how to place, move, duplicate, modify, and organize patterns in the Playlist to build a fuller track structure from existing beat and melody materials.",
+    "link": "https://docs.google.com/document/d/1UGm-IrFxN3iDIxxbm5gR0fYtc5-nuKE3hDTCOOw02Mo/edit?tab=t.ivxpva46jdpg#heading=h.2urs60r0anf9"
+  },
+  "0404": {
+    "name": "Add Effects in FL Studio Mixer",
+    "description": "Add effects to instruments in FL Studio using the Mixer. The task introduces how to route Channel Rack instruments to Mixer inserts, apply and adjust effects, send multiple instruments through the same effect chain, and understand special Mixer inserts such as Master and Current.",
+    "link": "https://docs.google.com/document/d/1UGm-IrFxN3iDIxxbm5gR0fYtc5-nuKE3hDTCOOw02Mo/edit?tab=t.7e5axk60nl5r#heading=h.2urs60r0anf9"
+  },
+  "0501": {
+    "name": "Calculate Conditional Revenue with SUMIFS in Excel",
+    "description": "Using a raw sales dataset, you need to answer 'What was the total revenue for 'Furniture' in the 'South' region for the month of January?' You will use SUMIFS to handle multiple overlapping conditions simultaneously. ",
+    "link": "https://docs.google.com/document/d/1M2lzRbqsJck3KL9ZWyr8mYLEQsFJ_BFFGoXEEzV0fUs/edit?tab=t.0501"
+  },
+  "0502": {
+    "name": "Generate insights using VLOOKUP",
+    "description": "You will use the VLOOKUP function to create a live link between the Sales Log and the Master Inventory. By the end of this task, entering a Product ID will automatically 'fetch' the correct price and category, allowing you to calculate the total revenue for all 100 rows in seconds. You will then 'nest' that result inside another calculation to pull the correct tax rate, and then create a column that includes the net revenue per transaction.",
+    "link": "https://docs.google.com/document/d/1M2lzRbqsJck3KL9ZWyr8mYLEQsFJ_BFFGoXEEzV0fUs/edit?tab=t.legiae4bkkni#heading=h.2urs60r0anf9"
+  },
+  "0503": {
+    "name": "Pivot Table with Interactive Visualization",
+    "description": "This task tests your ability to manipulate the same dataset in three different ways to answer distinct business questions: - How much do we pay each department on average? - How many people were hired each month in a US office location? - What is our ratio of contract vs. full-time staff in each office?",
+    "link": "https://docs.google.com/document/d/1M2lzRbqsJck3KL9ZWyr8mYLEQsFJ_BFFGoXEEzV0fUs/edit?tab=t.clg6j4urb0gr#heading=h.2urs60r0anf9"
+  }
+}

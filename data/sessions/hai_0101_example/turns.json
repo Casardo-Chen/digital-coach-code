@@ -1,0 +1,65 @@
+[
+  {
+    "turn_id": 1,
+    "start": "00:00:00.000",
+    "end": null,
+    "speaker": "Coach",
+    "text": "I can see your screen. Let's start by drawing a circle for the base of the potion bottle.",
+    "dialogue_acts": ["Inform", "Action Directive"],
+    "coaching_methods": ["Plan", "Direct Instruction"]
+  },
+  {
+    "turn_id": 2,
+    "start": "00:00:12.678",
+    "end": null,
+    "speaker": "Learner",
+    "text": "Okay.",
+    "dialogue_acts": ["Backchannel"],
+    "coaching_methods": []
+  },
+  {
+    "turn_id": 3,
+    "start": "00:00:12.679",
+    "end": null,
+    "speaker": "Coach",
+    "text": "Choose the Ellipse tool and hold shift while dragging so the body is a perfect circle.",
+    "dialogue_acts": ["Action Directive"],
+    "coaching_methods": ["Direct Instruction"]
+  },
+  {
+    "turn_id": 4,
+    "start": "00:00:16.312",
+    "end": null,
+    "speaker": "Learner",
+    "text": "Then let me create a circle first, I guess.",
+    "dialogue_acts": ["Action Directive", "Opinion"],
+    "coaching_methods": []
+  },
+  {
+    "turn_id": 5,
+    "start": "00:00:16.314",
+    "end": null,
+    "speaker": "Coach",
+    "text": "Great. Now grab the Rectangle tool and start the neck on top of that circle.",
+    "dialogue_acts": ["Backchannel", "Action Directive"],
+    "coaching_methods": ["Confirmation", "Plan", "Direct Instruction"]
+  },
+  {
+    "turn_id": 6,
+    "start": "00:00:45.693",
+    "end": null,
+    "speaker": "Learner",
+    "text": "Does it work?",
+    "dialogue_acts": ["Info Request"],
+    "coaching_methods": []
+  },
+  {
+    "turn_id": 7,
+    "start": "00:00:45.694",
+    "end": null,
+    "speaker": "Coach",
+    "text": "It is a good start. Select both shapes and use Union so they become one bottle.",
+    "dialogue_acts": ["Opinion", "Action Directive"],
+    "coaching_methods": ["Confirmation", "Explanation", "Direct Instruction"]
+  }
+]

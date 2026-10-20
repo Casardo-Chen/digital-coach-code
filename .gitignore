@@ -1,0 +1,35 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated results (keep the README)
+results/**
+!results/README.md
+!results/.gitkeep
+
+# Prototype
+node_modules/
+prototype/web/dist/
+llm_exports/
+chat_exports/
+session_chat/
+
+# Media never belongs in git
+*.mp4
+*.mkv
+*.wav
+*.m4a
+actions.db
+
+.DS_Store

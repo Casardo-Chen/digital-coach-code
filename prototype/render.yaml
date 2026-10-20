@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: digital-coach-gym-api
+    runtime: python
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run python backend_api.py
+    envVars:
+      - key: STREAM_API_KEY
+        sync: false
+      - key: STREAM_API_SECRET
+        sync: false
+      - key: STREAM_TIMEOUT
+        value: "30"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false

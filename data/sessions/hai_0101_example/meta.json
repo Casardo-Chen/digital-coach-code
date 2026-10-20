@@ -1,0 +1,16 @@
+{
+  "session_id": "hai_0101_example",
+  "source": "human-ai",
+  "task": "0101",
+  "software": "Figma",
+  "participants": {
+    "coach_id": "agent",
+    "learner_id": "A1",
+    "coach_type": "model"
+  },
+  "model": {
+    "provider": "openrouter",
+    "model": "google/gemini-3.1-pro-preview"
+  },
+  "call_id": "example-call"
+}
