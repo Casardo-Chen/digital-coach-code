@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="340" viewBox="0 0 1400 340" role="img" aria-label="DigitalCoach">
+  <rect width="1400" height="340" fill="#ffffff"/>
+  <g transform="translate(48 58)">
+    <rect x="8" y="18" width="196" height="148" rx="18" fill="#111111"/>
+    <rect x="24" y="36" width="164" height="112" rx="8" fill="#ffffff"/>
+    <rect x="40" y="54" width="72" height="48" rx="4" fill="#111111"/>
+    <rect x="124" y="58" width="48" height="8" rx="4" fill="#111111"/>
+    <rect x="124" y="76" width="48" height="8" rx="4" fill="#111111"/>
+    <rect x="124" y="94" width="32" height="8" rx="4" fill="#111111"/>
+    <path d="M150 166h46a16 16 0 0 1 16 16v28H166l-22 18v-18h-10a16 16 0 0 1-16-16v-12a16 16 0 0 1 16-16z" fill="#111111"/>
+  </g>
+  <text x="292" y="148" fill="#111111" font-family="Inter, Helvetica, Arial, sans-serif" font-size="92" font-weight="800" letter-spacing="-3">DigitalCoach</text>
+  <text x="296" y="204" fill="#111111" font-family="Inter, Helvetica, Arial, sans-serif" font-size="32" font-weight="700">Communication and Grounding Gaps</text>
+  <text x="296" y="252" fill="#222222" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24">Human and agentic coaching for computer-use tasks.</text>
+</svg>
