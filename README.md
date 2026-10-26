@@ -6,6 +6,7 @@
   <a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a>
 </b>
 </p>
+<p align="center">
 <b>EMNLP 2026 <span style="color: red; font-style: italic;">(Oral)</span></b>
 </p>
 <p align="center">
