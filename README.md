@@ -5,6 +5,7 @@
 <b>
   <a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a>
 </b>
+</p>
 <b>EMNLP 2026 <span style="color: red; font-style: italic;">(Oral)</span></b>
 </p>
 <p align="center">
@@ -63,29 +64,6 @@ This repo is the code behind that comparison:
 - dialogue act and coaching method annotation
 - CLAIR scoring of generated coach utterances, with input ablations
 - a real-time web prototype for VLM coach that calls models through OpenRouter
-
-## Data
-
-Human–human folders (`DigitalCoach/<task>/<session>/`) and human–AI exports (`transcript` JSON) both become:
-
-```text
-data/sessions/<session_id>/
-  meta.json
-  turns.json
-```
-
-`meta.json` records `session_id`, `source`, `task`, `software`, and `participants` (`coach_id`, `learner_id`, `coach_type` of `human` or `model`). A model coach also stores `model.provider` (`openrouter`) and `model.model`.
-
-Each turn is `{turn_id, start, end, speaker, text, dialogue_acts, coaching_methods}`. `end` may be null for a live session. `speaker` is `Coach` or `Learner`.
-
-Two short examples are committed: `hh_0101_example` and `hai_0101_example`.
-
-```python
-from digital_coach.dataset import load_sessions
-
-local = load_sessions()  # data/sessions, one row per turn
-hub = load_sessions("berkeley-hci/digital-coach")
-```
 
 ## Eval
 
