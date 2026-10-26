@@ -2,7 +2,10 @@
   <img src="docs/assets/banner.svg" alt="DigitalCoach — Communication and Grounding Gaps in Human and Agentic Computer Use Coaching" width="100%">
 </p>
 <p align="center">
-  <b>EMNLP 2026 (Oral)<a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching </a></b>
+<b>
+  <a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a>
+  EMNLP 2026 <span style="color: red; font-style: italic;">(Oral)</span>
+</b>
 </p>
 <p align="center">
   <a href="https://meng-chen.com">Meng Chen</a><sup>1</sup>,
