@@ -4,8 +4,8 @@
 <p align="center">
 <b>
   <a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a>
-  EMNLP 2026 <span style="color: red; font-style: italic;">(Oral)</span>
 </b>
+<b>EMNLP 2026 <span style="color: red; font-style: italic;">(Oral)</span></b>
 </p>
 <p align="center">
   <a href="https://meng-chen.com">Meng Chen</a><sup>1</sup>,
