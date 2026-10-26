@@ -2,7 +2,7 @@
   <img src="docs/assets/banner.svg" alt="DigitalCoach — Communication and Grounding Gaps in Human and Agentic Computer Use Coaching" width="100%">
 </p>
 <p align="center">
-  Official codebase for <b><a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a></b>
+  <b><a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching EMNLP 2026 (Oral)</a></b>
 </p>
 <p align="center">
   <a href="https://meng-chen.com">Meng Chen</a><sup>1</sup>,
@@ -15,9 +15,8 @@
 </p>
 <p align="center">
   <sub><sup>1</sup>UC Berkeley &nbsp; <sup>2</sup>TU Munich &nbsp; <sup>†</sup>Equal supervision</sub><br>
-  <sub>EMNLP 2026 (Oral, 2.5%)</sub>
 </p>
-<p align="center">Study coaching by what people <em>say and do</em> on the screen, not the transcript alone.</p>
+<p align="center">Evaluating VLMs on real-time, long-horizon computer use task teaching.</p>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2606.31980"><img src="https://img.shields.io/badge/arXiv-2606.31980-b31b1b" alt="arXiv"></a>
@@ -56,14 +55,11 @@ Full recordings stay out of git. Set `DIGITAL_COACH_DATASET=berkeley-hci/digital
 
 ## What it is
 
-DigitalCoach compares human coaches with model coaches on the same computer-use tasks (Figma, Blender, Onshape, FL Studio, Excel). Human coaches ground the next utterance in the learner’s screen. Model coaches often skip that grounding and give a direct instruction.
-
 This repo is the code behind that comparison:
 
-- one session format for recorded human coaching and live human–AI coaching
-- dialogue-act and coaching-method labels
+- dialogue act and coaching method annotation
 - CLAIR scoring of generated coach utterances, with input ablations
-- a realtime screen-share coach that calls models through OpenRouter
+- a real-time web prototype for VLM coach that calls models through OpenRouter
 
 ## Data
 
@@ -90,7 +86,7 @@ hub = load_sessions("berkeley-hci/digital-coach")
 
 ## Eval
 
-CLAIR (Lin et al., EMNLP 2023) asks a judge model whether a generated coach utterance matches the human coach at the same moment. Scores are 0–100. The judge goes through OpenRouter (`OPENROUTER_API_KEY`).
+CLAIR (Chan et al., EMNLP 2023) asks an LLM judge (gpt-5.1) to evaluate the similarity between two utterances given the same multimodal input. Scores are 0–100. The judge goes through OpenRouter (`OPENROUTER_API_KEY`).
 
 Input ablations change what the generator sees before that score:
 
