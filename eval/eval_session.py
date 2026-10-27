@@ -43,7 +43,8 @@ load_dotenv(_REPO_ROOT / ".env")
 load_dotenv()
 
 from digital_coach.llm import openrouter_client as _shared_openrouter_client
-from digital_coach.paths import eval_output_dir, resolve_session_dir
+from digital_coach.dataset import load_session
+from digital_coach.paths import eval_output_dir
 from eval.prompt_templates import (
     COACHING_METHODS_DEFINITION_AND_EXAMPLES,
     VLM_SYSTEM_INSTRUCTION_TEMPLATE,
@@ -53,7 +54,7 @@ from eval.prompt_templates import (
 )
 
 _VLM_PROMPT_STYLES = frozenset({"default", "teacher", "oracle"})
-_VLM_INPUT_MODALITIES = frozenset({"text-only", "text-image", "image-only", "text-video"})
+_VLM_INPUT_MODALITIES = frozenset({"text-only", "text-image", "image-only"})
 _GEMINI3_THINKING_LEVELS = frozenset({"low", "medium", "high"})
 _VLM_GENERATION_TEMPERATURE = 1.0
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -63,7 +64,7 @@ def _normalize_vlm_modality(value: str) -> str:
     """Canonical modality uses hyphens; accept legacy underscores (e.g. from older JSON)."""
     return (value or "text-image").strip().lower().replace("_", "-")
 
-# Session inputs live under data/sessions/<id>/. Ablation JSON is written to results/eval/<id>/.
+# Sessions load from the Hugging Face dataset. Ablation JSON is written to results/eval/<task>/<session>/.
 
 # task id prefix -> software tool
 TASK_PREFIX_TO_SOFTWARE_TOOL: Dict[str, str] = {
@@ -154,31 +155,6 @@ native-resolution embeds that blow up vision tokens or provider limits.
 
 def _is_qwen_vlm_model(model: str) -> bool:
     return (model or "").strip().lower().startswith("qwen")
-
-
-def _supports_native_video_vlm(model: str) -> bool:
-    """Models that support the ``text-video`` modality (native clip and/or frame fallback)."""
-    return _is_gemini_openai_model(model) or _is_qwen_vlm_model(model)
-
-
-def _uses_native_video_url_part(model: str) -> bool:
-    """
-    True when the chat API accepts an OpenAI-style ``video_url`` part.
-
-    Google's Gemini OpenAI-compatible endpoint (AI Studio) rejects ``video_url``; those
-  models use JPEG frames sampled from the same pre-coach MP4 segment instead.
-    """
-    return _is_qwen_vlm_model(model)
-
-
-def _vlm_video_max_bytes() -> int:
-    """Max encoded MP4 segment size for text-video (base64 inflates payload)."""
-    raw = (os.getenv("VLM_VIDEO_MAX_BYTES") or str(20 * 1024 * 1024)).strip()
-    try:
-        v = int(raw)
-    except ValueError:
-        v = 20 * 1024 * 1024
-    return max(256 * 1024, min(v, 100 * 1024 * 1024))
 
 
 def _vlm_reference_image_max_long_edge(model: str) -> Optional[int]:
@@ -897,14 +873,6 @@ def _summarize_openai_content_parts(parts: List[Dict[str, Any]]) -> List[Dict[st
                 image_url["url"] = f"{prefix};base64,<omitted:{len(b64)} chars>"
             out.append({"type": "image_url", "image_url": image_url})
             continue
-        if part_type == "video_url":
-            video_url = dict(p.get("video_url", {}))
-            url = str(video_url.get("url", ""))
-            if url.startswith("data:") and ";base64," in url:
-                prefix, b64 = url.split(";base64,", 1)
-                video_url["url"] = f"{prefix};base64,<omitted:{len(b64)} chars>"
-            out.append({"type": "video_url", "video_url": video_url})
-            continue
         out.append(p)
     return out
 
@@ -930,13 +898,12 @@ def _build_openai_messages_for_turn(
     context_window_seconds: float,
     reference_image_part: Optional[Dict[str, Any]],
     image_b64_list: List[str],
-    video_mp4_bytes: Optional[bytes] = None,
     prompt_style: str,
     oracle_method_tag: str = "",
     image_url_detail: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_instruction}]
-    if modality in {"text-only", "text-image", "text-video"}:
+    if modality in {"text-only", "text-image"}:
         if chat_history:
             messages.append(
                 {
@@ -986,46 +953,6 @@ def _build_openai_messages_for_turn(
                         "text": (
                             f"Recent ({float(context_window_seconds):.0f}s) learner screen "
                             "(images ordered earliest to most recent):"
-                        ),
-                    },
-                    *frame_parts,
-                ],
-            }
-        )
-
-    if modality == "text-video" and video_mp4_bytes:
-        messages.append(
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            f"Recent ({float(context_window_seconds):.0f}s) learner screen recording "
-                            "(video clip immediately before this coach turn):"
-                        ),
-                    },
-                    _video_url_content_part_from_mp4_bytes(video_mp4_bytes),
-                ],
-            }
-        )
-    elif modality == "text-video" and image_b64_list:
-        frame_parts: List[Dict[str, Any]] = []
-        for b64 in image_b64_list:
-            url_obj = {"url": f"data:image/jpeg;base64,{b64}"}
-            if image_url_detail:
-                url_obj["detail"] = image_url_detail
-            frame_parts.append({"type": "image_url", "image_url": url_obj})
-        messages.append(
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            f"Recent ({float(context_window_seconds):.0f}s) learner screen recording "
-                            "(frames from the clip immediately before this coach turn, "
-                            "ordered earliest to most recent):"
                         ),
                     },
                     *frame_parts,
@@ -1123,112 +1050,6 @@ def _extract_context_frames(
     return frames, frame_times
 
 
-def _extract_frames_from_segment(
-    clip: Any,
-    *,
-    seg_start: float,
-    seg_end: float,
-    fps: float,
-) -> Tuple[List[Any], List[float]]:
-    """Sample frames evenly over absolute timeline ``[seg_start, seg_end]`` in ``clip``."""
-    seg_start_f = max(0.0, float(seg_start))
-    seg_end_f = max(seg_start_f + 1e-3, float(seg_end))
-    effective_window = seg_end_f - seg_start_f
-    n = max(1, int(math.floor(effective_window * float(fps))))
-    if n == 1:
-        times = [seg_start_f]
-    else:
-        times = [
-            seg_start_f + effective_window * (i / max(1, n - 1))
-            for i in range(n)
-        ]
-    frame_times = [min(max(seg_start_f, t), seg_end_f - 1e-6) for t in times]
-    frames = [clip.get_frame(t) for t in frame_times]
-    return frames, frame_times
-
-
-_GEMINI_TEXT_VIDEO_MAX_FRAMES = 24
-
-
-def _maybe_cap_gemini_text_video_frames(
-    frames: List[Any],
-    frame_times: List[float],
-) -> Tuple[List[Any], List[float]]:
-    return _uniform_subsample_pairs(frames, frame_times, _GEMINI_TEXT_VIDEO_MAX_FRAMES)
-
-
-def _pre_turn_video_segment_bounds(
-    *,
-    clip: Any,
-    start_seconds: float,
-    window_seconds: float,
-) -> Tuple[float, float]:
-    """Timeline [seg_start, seg_end] for the pre-coach video segment used in text-video prompts."""
-    duration = float(getattr(clip, "duration", 0.0) or 0.0)
-    if duration <= 0:
-        duration = max(float(start_seconds), 1.0)
-    turn_start = max(0.0, float(start_seconds))
-    seg_start = max(0.0, turn_start - float(window_seconds))
-    seg_end = min(duration, max(seg_start + 1e-3, turn_start))
-    return seg_start, seg_end
-
-
-def _subclip_video_segment(clip: Any, seg_start: float, seg_end: float) -> Any:
-    """MoviePy 1.x ``subclip`` / 2.x ``subclipped``."""
-    if hasattr(clip, "subclipped"):
-        return clip.subclipped(seg_start, seg_end)
-    return clip.subclip(seg_start, seg_end)
-
-
-def _write_video_segment_mp4(segment: Any, path: Path) -> None:
-    kwargs: Dict[str, Any] = {"codec": "libx264", "audio": False}
-    for extra in ({"logger": None}, {"verbose": False}, {}):
-        try:
-            segment.write_videofile(str(path), **kwargs, **extra)
-            return
-        except TypeError:
-            continue
-    segment.write_videofile(str(path), **kwargs)
-
-
-def _extract_video_segment_mp4_bytes(
-    clip: Any,
-    *,
-    seg_start: float,
-    seg_end: float,
-) -> bytes:
-    """Cut ``[seg_start, seg_end]`` from an open MoviePy clip and return MP4 bytes."""
-    segment = _subclip_video_segment(clip, seg_start, seg_end)
-    fd, tmp_name = tempfile.mkstemp(suffix=".mp4")
-    os.close(fd)
-    tmp_path = Path(tmp_name)
-    try:
-        _write_video_segment_mp4(segment, tmp_path)
-        data = tmp_path.read_bytes()
-        max_b = _vlm_video_max_bytes()
-        if len(data) > max_b:
-            raise ValueError(
-                f"Encoded video segment [{seg_start:.1f}s, {seg_end:.1f}s] is {len(data)} bytes "
-                f"(max {max_b}). Shorten --vlm-context-seconds or raise VLM_VIDEO_MAX_BYTES."
-            )
-        return data
-    finally:
-        try:
-            segment.close()
-        except Exception:  # pragma: no cover
-            pass
-        tmp_path.unlink(missing_ok=True)
-
-
-def _video_url_content_part_from_mp4_bytes(mp4_bytes: bytes) -> Dict[str, Any]:
-    """OpenAI-compatible ``video_url`` part (e.g. OpenRouter Qwen)."""
-    b64 = base64.b64encode(mp4_bytes).decode("ascii")
-    return {
-        "type": "video_url",
-        "video_url": {"url": f"data:video/mp4;base64,{b64}"},
-    }
-
-
 def _load_turns(turns_path: Path) -> List[Dict[str, Any]]:
     turns = json.loads(turns_path.read_text(encoding="utf-8"))
     if not isinstance(turns, list):
@@ -1244,17 +1065,6 @@ def _load_turns(turns_path: Path) -> List[Dict[str, Any]]:
     return normalized
 
 
-def _effective_vlm_modality(
-    vlm_input_modality: str,
-    vlm_model: str,
-    gemini_video_input: bool,
-) -> str:
-    modality = _normalize_vlm_modality(vlm_input_modality)
-    if gemini_video_input and str(vlm_model).strip().lower().startswith("gemini"):
-        modality = "text-video"
-    return modality
-
-
 def print_sample_input_chats(
     *,
     turns_path: Path,
@@ -1263,22 +1073,15 @@ def print_sample_input_chats(
     vlm_fps: float,
     vlm_input_modality: str,
     vlm_model: str,
-    gemini_video_input: bool,
     sample_turn_ids: List[int],
     vlm_prompt_style: str = "default",
 ) -> None:
     """
     Print one sample conversation (OpenAI chat_history + final user text) per requested coach turn_id.
-    Does not call any API. For text-image / image-only / text-video, opens the video when the file exists.
+    Does not call any API. For text-image / image-only, opens the video when the file exists.
     """
     turns = _load_turns(turns_path)
-    modality = _effective_vlm_modality(vlm_input_modality, vlm_model, gemini_video_input)
-    if modality == "text-video" and not _supports_native_video_vlm(vlm_model):
-        print(
-            "[sample chats] text-video requires a Gemini or Qwen model id; "
-            "showing transcript layout only (no native clip)."
-        )
-
+    modality = _normalize_vlm_modality(vlm_input_modality)
     clip: Any = None
     try:
         for tid in sample_turn_ids:
@@ -1316,14 +1119,11 @@ def print_sample_input_chats(
             #     ]
 
             frame_times: Optional[List[float]] = None
-            video_start: Optional[float] = None
-            video_end: Optional[float] = None
             image_note: Dict[str, Any] = {}
-            sample_video_bytes: Optional[bytes] = None
             sample_image_b64_list: List[str] = []
 
             if modality in {"text-image", "image-only"}:
-                if video_path.is_file():
+                if video_path is not None and video_path.is_file():
                     if clip is None:
                         clip = moviepy.VideoFileClip(str(video_path))
                     _, frame_times = _extract_context_frames(
@@ -1339,44 +1139,6 @@ def print_sample_input_chats(
                     }
                 else:
                     print(f"[sample chats] turn_id={tid}: video missing, no frame times ({video_path})")
-            elif modality == "text-video":
-                if video_path.is_file():
-                    if clip is None:
-                        clip = moviepy.VideoFileClip(str(video_path))
-                    video_start, video_end = _pre_turn_video_segment_bounds(
-                        clip=clip,
-                        start_seconds=start_seconds,
-                        window_seconds=float(context_window_seconds),
-                    )
-                    if _uses_native_video_url_part(vlm_model):
-                        sample_video_bytes = _extract_video_segment_mp4_bytes(
-                            clip, seg_start=video_start, seg_end=video_end
-                        )
-                        image_note = {
-                            "kind": "video_url",
-                            "segment_s": [video_start, video_end],
-                            "mp4_bytes": len(sample_video_bytes),
-                        }
-                    else:
-                        frames, frame_times = _extract_frames_from_segment(
-                            clip,
-                            seg_start=video_start,
-                            seg_end=video_end,
-                            fps=vlm_fps,
-                        )
-                        frames, frame_times = _maybe_cap_gemini_text_video_frames(
-                            frames, frame_times
-                        )
-                        sample_image_b64_list = _frames_to_base64_jpeg(frames)
-                        image_note = {
-                            "kind": "video_frames_jpeg",
-                            "segment_s": [video_start, video_end],
-                            "frame_count": len(frames),
-                            "frame_times_s": frame_times,
-                        }
-                else:
-                    print(f"[sample chats] turn_id={tid}: video missing ({video_path})")
-
             openai_messages = _build_openai_messages_for_turn(
                 system_instruction=_vlm_system_instruction(
                     software_tool="software tool",
@@ -1390,7 +1152,6 @@ def print_sample_input_chats(
                 context_window_seconds=float(context_window_seconds),
                 reference_image_part=None,
                 image_b64_list=sample_image_b64_list,
-                video_mp4_bytes=sample_video_bytes,
                 prompt_style=str(vlm_prompt_style or "default").strip().lower(),
                 oracle_method_tag=_extract_oracle_coaching_method_tag(turn),
                 image_url_detail=_vlm_image_url_detail_for_model(vlm_model),
@@ -1449,7 +1210,6 @@ def _vlm_openai_messages_for_coach_turn_index(
         ]
 
     image_b64_list: List[str] = []
-    video_mp4_bytes: Optional[bytes] = None
 
     if modality in {"text-image", "image-only"}:
         frames, frame_times = _extract_context_frames(
@@ -1462,39 +1222,14 @@ def _vlm_openai_messages_for_coach_turn_index(
             frames, frame_times, vlm_model=vlm_model
         )
         image_b64_list = _frames_to_base64_jpeg(frames)
-    elif modality == "text-video":
-        if not _supports_native_video_vlm(vlm_model):
-            raise ValueError(
-                f"text-video modality requires a Gemini or Qwen model id; got {vlm_model!r}."
-            )
-        seg_start, seg_end = _pre_turn_video_segment_bounds(
-            clip=clip,
-            start_seconds=start_seconds,
-            window_seconds=float(context_window_seconds),
-        )
-        if _uses_native_video_url_part(vlm_model):
-            video_mp4_bytes = _extract_video_segment_mp4_bytes(
-                clip, seg_start=seg_start, seg_end=seg_end
-            )
-        else:
-            frames, frame_times = _extract_frames_from_segment(
-                clip,
-                seg_start=seg_start,
-                seg_end=seg_end,
-                fps=vlm_fps,
-            )
-            frames, frame_times = _maybe_cap_gemini_text_video_frames(frames, frame_times)
-            image_b64_list = _frames_to_base64_jpeg(frames)
-
     detail = _vlm_image_url_detail_for_model(vlm_model)
     openai_messages = _build_openai_messages_for_turn(
         system_instruction=system_instruction,
-        chat_history=(chat_history if modality in {"text-image", "text-video"} else []),
+        chat_history=(chat_history if modality in {"text-only", "text-image"} else []),
         modality=modality,
         context_window_seconds=float(context_window_seconds),
         reference_image_part=reference_image_part,
         image_b64_list=image_b64_list,
-        video_mp4_bytes=video_mp4_bytes,
         prompt_style=style,
         oracle_method_tag=_extract_oracle_coaching_method_tag(turn),
         image_url_detail=detail,
@@ -1550,10 +1285,18 @@ def vlm_generate_coach_utterance_for_turn_index(
     return str(raw).strip()
 
 
+def _open_clip(video_path: Optional[Path], modality: str) -> Any:
+    if modality == "text-only":
+        return None
+    if video_path is None or not video_path.is_file():
+        raise FileNotFoundError(f"{modality} needs the session video; got {video_path}")
+    return moviepy.VideoFileClip(str(video_path))
+
+
 def run_vlm_eval(
     *,
     turns_path: Path,
-    video_path: Path,
+    video_path: Optional[Path],
     software_tool: str,
     task_name: str,
     task_description: str = "",
@@ -1564,7 +1307,6 @@ def run_vlm_eval(
     max_coach_turns: Optional[int] = None,
     vlm_input_modality: str = "text-image",
     vlm_prompt_style: str = "default",
-    gemini_video_input: bool = False,
     print_final_prompt: bool = False,
     use_openai_batch: bool = False,
     openai_batch_poll_interval_s: float = 15.0,
@@ -1583,14 +1325,7 @@ def run_vlm_eval(
             f"Invalid vlm_input_modality {vlm_input_modality!r}; "
             f"expected one of {sorted(_VLM_INPUT_MODALITIES)}"
         )
-    modality = _effective_vlm_modality(vlm_input_modality, vlm_model, gemini_video_input)
-    if modality == "text-video" and not _supports_native_video_vlm(vlm_model):
-        raise ValueError(
-            f"text-video modality requires a Gemini or Qwen model id; got {vlm_model!r}."
-        )
-    if modality == "text-video" and use_openai_batch:
-        raise ValueError("text-video is not supported with --openai-batch.")
-
+    modality = _normalize_vlm_modality(vlm_input_modality)
     style = (vlm_prompt_style or "default").strip().lower()
     if style not in _VLM_PROMPT_STYLES:
         raise ValueError(
@@ -1620,19 +1355,6 @@ def run_vlm_eval(
             "(uniform subsample over the window). "
             "Override with env QWEN_VLM_MAX_CONTEXT_FRAMES."
         )
-    if modality == "text-video":
-        if _uses_native_video_url_part(vlm_model):
-            print(
-                f"text-video: native MP4 clip per turn (max {_vlm_video_max_bytes()} bytes); "
-                "override with VLM_VIDEO_MAX_BYTES."
-            )
-        else:
-            print(
-                "text-video: Gemini AI Studio does not support video_url; "
-                f"sending up to {_GEMINI_TEXT_VIDEO_MAX_FRAMES} JPEG frames sampled from "
-                "the pre-coach clip instead."
-            )
-
     results: List[Dict[str, Any]] = []
 
     if use_openai_batch:
@@ -1648,7 +1370,7 @@ def run_vlm_eval(
         if max_coach_turns is not None:
             limited_indices = limited_indices[: int(max_coach_turns)]
 
-        clip = moviepy.VideoFileClip(str(video_path))
+        clip = _open_clip(video_path, modality)
         try:
             batch_items: List[Tuple[str, List[Dict[str, Any]]]] = []
             meta: List[Tuple[int, Dict[str, Any]]] = []
@@ -1693,13 +1415,14 @@ def run_vlm_eval(
                 results.append(out_turn)
                 print(f"[{ci+1}/{len(batch_items)}] turn_id={turn_id} -> {generated[:60]!r}")
         finally:
-            clip.close()
+            if clip is not None:
+                clip.close()
 
         return results
 
     vlm_client = _openai_compatible_client_for_model(vlm_model, use_openrouter=use_openrouter)
 
-    clip = moviepy.VideoFileClip(str(video_path))
+    clip = _open_clip(video_path, modality)
     try:
         for ci, turn_index in enumerate(coach_indices):
             if max_coach_turns is not None and ci >= max_coach_turns:
@@ -1730,7 +1453,8 @@ def run_vlm_eval(
             results.append(out_turn)
             print(f"[{ci+1}/{len(coach_indices)}] turn_id={turn_id} -> {generated[:60]!r}")
     finally:
-        clip.close()
+        if clip is not None:
+            clip.close()
 
     return results
 
@@ -1746,38 +1470,14 @@ def main() -> None:
     p.add_argument(
         "-s",
         "--session",
-        default="hh_0101_example",
-        help="Session folder under data/sessions (default: hh_0101_example).",
-    )
-    p.add_argument(
-        "-o",
-        "--out_path",
-        type=str,
-        default="./turns_vlm_gpt-5.4.json",
-        help="Not used; outputs are vlms/<task>/<session>/turns_vlm_<model>.json or turns_vlm_<model>_<N>.json.",
-    )
-    p.add_argument(
-        "--video",
-        type=str,
-        default="screen.mp4",
-        help="Video filename under .../<session>/media/ (e.g. screen.mp4 or screen-2.mp4).",
-    )
-    p.add_argument(
-        "--turns",
-        type=str,
-        default="turns.json",
-        help="Turns filename inside the session folder (default: turns.json).",
+        default="C1L1",
+        help="Session id in the Hugging Face dataset (default: C1L1).",
     )
     p.add_argument(
         "--vlm_models",
         nargs="+",
         default=["google/gemini-3.1-pro-preview"],
         help='VLM model names to evaluate.',
-    )
-    p.add_argument(
-        "--gemini_video_input",
-        action="store_true",
-        help="Deprecated alias: for Gemini models, same as --vlm-input-modality text-video.",
     )
     p.add_argument(
         "--vlm-context-seconds",
@@ -1788,12 +1488,9 @@ def main() -> None:
     )
     p.add_argument(
         "--vlm-input-modality",
-        choices=("text-only", "text-image", "image-only", "text-video"),
+        choices=("text-only", "text-image", "image-only"),
         default="text-image",
-        help=(
-            "Ablation: transcript only; transcript + JPEG frames; images only; or transcript + "
-            "pre-coach video (Qwen: native MP4 via video_url; Gemini: JPEG frames from that clip)."
-        ),
+        help="Ablation: transcript only; transcript + JPEG frames; or frames only.",
     )
     p.add_argument(
         "--vlm-prompt-style",
@@ -1907,10 +1604,9 @@ def main() -> None:
                     f"--openai-batch only supports native OpenAI models; {m!r} is routed to another provider."
                 )
 
-    session_dir = resolve_session_dir(args.session, task=args.task)
-    session_processed = session_dir
-    session_vlms = eval_output_dir(session_dir.name)
-    media_dir = session_dir / "media" if (session_dir / "media").is_dir() else session_dir
+    needs_video = args.vlm_input_modality != "text-only" and not args.dry_run
+    session = load_session(args.task, args.session, with_video=needs_video)
+    session_vlms = eval_output_dir(args.task, args.session)
     software_tool = software_tool_for_task(args.task)
     task_name, task_description, final_reference_path = _load_task_prompt_context(args.task)
     resolved_style = (args.vlm_prompt_style or "default").strip().lower()
@@ -1929,160 +1625,138 @@ def main() -> None:
         print("=== Rendered System Prompt ===")
         print(rendered_system_prompt)
         print("=== End System Prompt ===")
-    default_video = "screen.mp4"
-    video_arg = args.video.strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        turns_path = Path(tmp) / "turns.json"
+        turns_path.write_text(json.dumps(session["turns"]), encoding="utf-8")
+        _run_session(args, session["video_path"], turns_path, session_vlms, effective_fps,
+                     openrouter_effective, software_tool, task_name, task_description,
+                     final_reference_path)
 
-    turns_paths = [session_processed / args.turns.strip()]
 
-    def video_name_for_turns_file(turns_path: Path) -> str:
-        if len(turns_paths) > 1:
-            return video_filename_for_turns_splitted(turns_path.name)
-        if video_arg != default_video:
-            return video_arg
-        return video_filename_for_turns_splitted(turns_path.name)
+def _run_session(args, video_path, turns_path, session_vlms, effective_fps, openrouter_effective,
+                 software_tool, task_name, task_description, final_reference_path) -> None:
+    print(f"Session: {args.task}/{args.session} | Video: {video_path or 'not loaded'}")
 
-    for turns_path in turns_paths:
-        video_name = video_name_for_turns_file(turns_path)
-        video_path = media_dir / video_name
-        print(f"Turns: {turns_path.name} | Video: {video_name}")
-
-        if args.print_sample_chats:
-            if turns_path.is_file():
-                print_sample_input_chats(
-                    turns_path=turns_path,
-                    video_path=video_path,
-                    context_window_seconds=float(args.vlm_context_seconds),
-                    vlm_fps=effective_fps,
-                    vlm_input_modality=args.vlm_input_modality,
-                    vlm_model=(args.vlm_models[0] if args.vlm_models else "gpt-5"),
-                    gemini_video_input=args.gemini_video_input,
-                    sample_turn_ids=list(args.sample_chat_turn_ids),
-                    vlm_prompt_style=args.vlm_prompt_style,
-                )
-            else:
-                print(f"[sample chats] Missing turns file: {turns_path}")
-
-        max_turns = args.max_coach_turns if args.max_coach_turns > 0 else None
-        tag = (args.vlm_result_tag or "").strip()
-        
-        def model_output_label(model_name: str) -> str:
-            # Filename segments separated by '_'; modality uses hyphens (text-image, …).
-            effective_modality = _effective_vlm_modality(
-                args.vlm_input_modality,
-                model_name,
-                args.gemini_video_input,
+    if args.print_sample_chats:
+        if turns_path.is_file():
+            print_sample_input_chats(
+                turns_path=turns_path,
+                video_path=video_path,
+                context_window_seconds=float(args.vlm_context_seconds),
+                vlm_fps=effective_fps,
+                vlm_input_modality=args.vlm_input_modality,
+                vlm_model=(args.vlm_models[0] if args.vlm_models else "gpt-5"),
+                sample_turn_ids=list(args.sample_chat_turn_ids),
+                vlm_prompt_style=args.vlm_prompt_style,
             )
-            style_part = str(args.vlm_prompt_style or "default").strip().lower()
-            modality_part = effective_modality
-            context_part = f"ctx{int(float(args.vlm_context_seconds))}"
-            sample_part = f"fps{str(float(effective_fps)).rstrip('0').rstrip('.')}"
-            parts = [model_name, modality_part, style_part, context_part, sample_part]
-            if tag:
-                parts.append(tag)
-            return "_".join(parts)
+        else:
+            print(f"[sample chats] Missing turns file: {turns_path}")
 
-        if args.dry_run:
-            if not turns_path.is_file():
-                print(f"[DRY RUN] Missing turns file: {turns_path}")
-                continue
-            if not video_path.is_file():
-                print(f"[DRY RUN] Missing video file: {video_path}")
-                continue
+    max_turns = args.max_coach_turns if args.max_coach_turns > 0 else None
+    tag = (args.vlm_result_tag or "").strip()
+    
+    def model_output_label(model_name: str) -> str:
+        # Filename segments separated by '_'; modality uses hyphens (text-image, …).
+        effective_modality = _normalize_vlm_modality(args.vlm_input_modality)
+        style_part = str(args.vlm_prompt_style or "default").strip().lower()
+        modality_part = effective_modality
+        context_part = f"ctx{int(float(args.vlm_context_seconds))}"
+        sample_part = f"fps{str(float(effective_fps)).rstrip('0').rstrip('.')}"
+        parts = [model_name, modality_part, style_part, context_part, sample_part]
+        if tag:
+            parts.append(tag)
+        return "_".join(parts)
 
-            turns = _load_turns(turns_path)
-            coach_turns = [t for t in turns if _is_coach_speaker(t.get("speaker", ""))]
-            coach_count = len(coach_turns)
-            if max_turns is not None:
-                coach_count = min(coach_count, max_turns)
+    if args.dry_run:
+        turns = _load_turns(turns_path)
+        coach_turns = [t for t in turns if _is_coach_speaker(t.get("speaker", ""))]
+        coach_count = len(coach_turns)
+        if max_turns is not None:
+            coach_count = min(coach_count, max_turns)
+        print(
+            f"[DRY RUN] Would evaluate {coach_count} coach turns from {turns_path.name} "
+            f"using tool={software_tool}, modality={args.vlm_input_modality}, "
+            f"context={args.vlm_context_seconds}s, "
+            f"fps={effective_fps}"
+            f"{'; OpenAI Batch API (one job per model)' if args.openai_batch else ''}"
+            f"{'; OpenRouter' if openrouter_effective else ''}."
+        )
+        for model_name in args.vlm_models:
+            label = model_output_label(model_name)
+            model_out_path = session_vlms / vlm_output_filename_for_model(turns_path.name, label)
             print(
-                f"[DRY RUN] Would evaluate {coach_count} coach turns from {turns_path.name} "
-                f"using tool={software_tool}, modality={args.vlm_input_modality}, "
-                f"context={args.vlm_context_seconds}s, "
-                f"fps={effective_fps}"
-                f"{'; OpenAI Batch API (one job per model)' if args.openai_batch else ''}"
-                f"{'; OpenRouter' if openrouter_effective else ''}."
+                f"[DRY RUN] model={model_name} -> {model_out_path} "
+                f"(JSON shape: {{condition, turns}})"
             )
-            for model_name in args.vlm_models:
-                label = model_output_label(model_name)
-                model_out_path = session_vlms / vlm_output_filename_for_model(turns_path.name, label)
-                print(
-                    f"[DRY RUN] model={model_name} -> {model_out_path} "
-                    f"(JSON shape: {{condition, turns}})"
-                )
-            continue
+        return
 
-        with ThreadPoolExecutor(max_workers=len(args.vlm_models)) as executor:
-            futures = {}
-            for model_name in args.vlm_models:
-                print(f"Submitting eval for model={model_name}")
-                futures[executor.submit(
-                    run_vlm_eval,
-                    turns_path=turns_path,
-                    video_path=video_path,
-                    software_tool=software_tool,
-                    task_name=task_name,
-                    task_description=task_description,
-                    reference_final_image=final_reference_path,
-                    vlm_model=model_name,
-                    context_window_seconds=float(args.vlm_context_seconds),
-                    vlm_fps=effective_fps,
-                    max_coach_turns=max_turns,
-                    vlm_input_modality=args.vlm_input_modality,
-                    vlm_prompt_style=args.vlm_prompt_style,
-                    gemini_video_input=args.gemini_video_input,
-                    print_final_prompt=args.print_final_prompt,
-                    use_openai_batch=args.openai_batch,
-                    openai_batch_poll_interval_s=float(args.openai_batch_poll_interval),
-                    use_openrouter=bool(args.openrouter)
+    with ThreadPoolExecutor(max_workers=len(args.vlm_models)) as executor:
+        futures = {}
+        for model_name in args.vlm_models:
+            print(f"Submitting eval for model={model_name}")
+            futures[executor.submit(
+                run_vlm_eval,
+                turns_path=turns_path,
+                video_path=video_path,
+                software_tool=software_tool,
+                task_name=task_name,
+                task_description=task_description,
+                reference_final_image=final_reference_path,
+                vlm_model=model_name,
+                context_window_seconds=float(args.vlm_context_seconds),
+                vlm_fps=effective_fps,
+                max_coach_turns=max_turns,
+                vlm_input_modality=args.vlm_input_modality,
+                vlm_prompt_style=args.vlm_prompt_style,
+                print_final_prompt=args.print_final_prompt,
+                use_openai_batch=args.openai_batch,
+                openai_batch_poll_interval_s=float(args.openai_batch_poll_interval),
+                use_openrouter=bool(args.openrouter)
+                or _is_openrouter_open_model_slug(model_name),
+            )] = model_name
+
+        for future in as_completed(futures):
+            model_name = futures[future]
+            model_results = future.result()
+            print(f"Completed eval for model={model_name}")
+            label = model_output_label(model_name)
+            model_out_path = session_vlms / vlm_output_filename_for_model(turns_path.name, label)
+            model_rows = sorted(
+                model_results,
+                key=lambda r: (
+                    _timestamp_to_seconds(str(r.get("start", "0"))),
+                    int(r.get("turn_id", 0)),
+                ),
+            )
+            tag_part = (args.vlm_result_tag or "").strip()
+            prompt_condition = str(args.vlm_prompt_style or "default").strip().lower()
+            if tag_part:
+                prompt_condition = f"{prompt_condition}|tag={tag_part}"
+            effective_modality = _normalize_vlm_modality(args.vlm_input_modality)
+            output_doc: Dict[str, Any] = {
+                "condition": {
+                    "input_context": float(args.vlm_context_seconds),
+                    "sample_rate": float(effective_fps),
+                    "fps": effective_fps,
+                    "input_modality": effective_modality,
+                    "prompt_condition": prompt_condition,
+                    "model": model_name,
+                    "openai_batch": bool(args.openai_batch),
+                    "openrouter": bool(args.openrouter)
                     or _is_openrouter_open_model_slug(model_name),
-                )] = model_name
-
-            for future in as_completed(futures):
-                model_name = futures[future]
-                model_results = future.result()
-                print(f"Completed eval for model={model_name}")
-                label = model_output_label(model_name)
-                model_out_path = session_vlms / vlm_output_filename_for_model(turns_path.name, label)
-                model_rows = sorted(
-                    model_results,
-                    key=lambda r: (
-                        _timestamp_to_seconds(str(r.get("start", "0"))),
-                        int(r.get("turn_id", 0)),
-                    ),
-                )
-                tag_part = (args.vlm_result_tag or "").strip()
-                prompt_condition = str(args.vlm_prompt_style or "default").strip().lower()
-                if tag_part:
-                    prompt_condition = f"{prompt_condition}|tag={tag_part}"
-                effective_modality = _effective_vlm_modality(
-                    args.vlm_input_modality,
-                    model_name,
-                    args.gemini_video_input,
-                )
-                output_doc: Dict[str, Any] = {
-                    "condition": {
-                        "input_context": float(args.vlm_context_seconds),
-                        "sample_rate": float(effective_fps),
-                        "fps": effective_fps,
-                        "input_modality": effective_modality,
-                        "prompt_condition": prompt_condition,
-                        "model": model_name,
-                        "openai_batch": bool(args.openai_batch),
-                        "openrouter": bool(args.openrouter)
-                        or _is_openrouter_open_model_slug(model_name),
-                        "software_tool": software_tool,
-                        "task": args.task,
-                        "session": args.session,
-                        "turns_source": turns_path.name,
-                    },
-                    "turns": model_rows,
-                }
-                model_out_path.parent.mkdir(parents=True, exist_ok=True)
-                model_out_path.write_text(
-                    json.dumps(output_doc, ensure_ascii=False, indent=2) + "\n",
-                    encoding="utf-8",
-                )
-                print(f"Wrote {model_out_path.name}")
+                    "software_tool": software_tool,
+                    "task": args.task,
+                    "session": args.session,
+                    "turns_source": turns_path.name,
+                },
+                "turns": model_rows,
+            }
+            model_out_path.parent.mkdir(parents=True, exist_ok=True)
+            model_out_path.write_text(
+                json.dumps(output_doc, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            print(f"Wrote {model_out_path.name}")
 
 
 if __name__ == "__main__":

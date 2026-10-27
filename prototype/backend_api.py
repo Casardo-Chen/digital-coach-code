@@ -551,7 +551,39 @@ def _export_session_chat_transcript(call_id: str) -> Path | None:
     }
     out_path.write_text(json.dumps(document, indent=2, ensure_ascii=False), encoding="utf-8")
     logger.info("Exported session chat transcript call_id=%s path=%s turns=%s", safe, out_path, len(transcript))
+    _export_shared_schema_session(safe, created_raw, transcript)
     return out_path
+
+
+def _live_sessions_dir() -> Path:
+    raw = os.getenv("DIGITAL_COACH_RESULTS", "").strip()
+    root = Path(raw).expanduser() if raw else Path(__file__).resolve().parent.parent / "results"
+    return root / "sessions"
+
+
+def _export_shared_schema_session(call_id: str, created_at: str | None, transcript: list[dict]) -> Path:
+    """Write meta.json + turns.json in the same layout as the Hugging Face human-human sessions."""
+    task = runtime_config.task_id or _DEFAULT_TASK_ID
+    session_dir = _live_sessions_dir() / task / call_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "task": task,
+        "session": call_id,
+        "software": _infer_software_tool(task),
+        "source": "human-ai",
+        "participants": {"coach_id": "agent", "learner_id": None, "coach_type": "model"},
+        "model": {"provider": runtime_config.provider, "model": runtime_config.model},
+        "start_time": created_at,
+        "turn_count": len(transcript),
+    }
+    turns = [
+        {**t, "end": None, "dialogue_acts": [], "coaching_methods": []}
+        for t in transcript
+    ]
+    for name, doc in (("meta.json", meta), ("turns.json", turns)):
+        (session_dir / name).write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    logger.info("Exported shared-schema session call_id=%s dir=%s", call_id, session_dir)
+    return session_dir
 
 
 class ChatCompletionsLoggingMixin:

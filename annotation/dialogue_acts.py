@@ -1,27 +1,8 @@
-import json
-import os
-import re
-import sys
-from pathlib import Path
+"""Dialogue-act annotation for every turn (Coach and Learner) via OpenRouter."""
 
-try:
-    from dotenv import load_dotenv
+import argparse
 
-    load_dotenv()
-except ImportError:
-    pass
-
-from openai import OpenAI
-from google import genai
-from google.genai import types as genai_types
-
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-import box_root
-
-BOX_DIGITAL_COACH = box_root.BOX_DIGITAL_COACH
-PROCESSED_DATA_FOLDER = BOX_DIGITAL_COACH / "processed"
+from annotation.common import add_session_args, call_json_model, load_input_turns, write_output
 
 DIALOGUE_ACTS_PROMPT = """\
 ### Info Request
@@ -184,45 +165,8 @@ def build_prompt(turns: list[dict]) -> str:
 """
 
 
-def annotate(
-    turns: list[dict], provider: str = "gpt", model: str | None = None
-) -> list[dict]:
-    prompt = build_prompt(turns)
-
-    if provider == "gemini":
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found in environment")
-        model_name = model or "gemini-3.1-pro-preview"
-        client = genai.Client(api_key=api_key)
-        print(f"Sending to Gemini ({model_name})...")
-        response = client.models.generate_content(
-            model=model_name,
-            contents=f"{SYSTEM_PROMPT}\n\n{prompt}",
-            config=genai_types.GenerateContentConfig(temperature=0.2),
-        )
-        raw = (response.text or "").strip()
-    else:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment")
-        model_name = model or "gpt-5.4"
-        client = OpenAI(api_key=api_key)
-        print(f"Sending to GPT ({model_name})...")
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-        )
-        raw = (response.choices[0].message.content or "").strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
-
-    return json.loads(raw)
+def annotate(turns: list[dict], model: str | None = None) -> list[dict]:
+    return call_json_model(SYSTEM_PROMPT, build_prompt(turns), model)
 
 
 def apply_dialogue_acts(turns: list[dict], annotations: list[dict]) -> list[dict]:
@@ -235,64 +179,19 @@ def apply_dialogue_acts(turns: list[dict], annotations: list[dict]) -> list[dict
         if ann and isinstance(ann.get("dialogue_acts"), list) and ann["dialogue_acts"]:
             t["dialogue_acts"] = ann["dialogue_acts"]
         else:
-            t["dialogue_acts"] = ["Not Enough Information"]
+            t["dialogue_acts"] = ["Not Enough Info"]
         updated.append(t)
     return updated
 
 
 def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Annotate turns.json with dialogue_acts and write turns_annotated.json."
-    )
-    parser.add_argument(
-        "-t",
-        "--task",
-        default="0101",
-        help='Task folder under processed (default: "0101").',
-    )
-    parser.add_argument(
-        "-s",
-        "--session",
-        default="C1L1",
-        help='Session folder under processed/<task> (default: "C1L1").',
-    )
-    parser.add_argument(
-        "-p",
-        "--provider",
-        choices=["gpt", "gemini"],
-        default="gpt",
-        help='Model provider to use for annotation (default: "gpt").',
-    )
-    parser.add_argument(
-        "--model",
-        default=None,
-        help='Model name override. Defaults: "gpt-5.4" for GPT, "gemini-3.1-pro-preview" for Gemini.',
-    )
+    parser = argparse.ArgumentParser(description="Label each turn with dialogue acts.")
+    add_session_args(parser)
     args = parser.parse_args()
 
-    session_dir = PROCESSED_DATA_FOLDER / args.task / args.session
-    in_path = session_dir / "turns_splitted.json"
-    provider_suffix = "gpt" if args.provider == "gpt" else "gemini"
-    out_path = (
-        _REPO_ROOT
-        / "data_analysis"
-        / "annotations"
-        / f"{args.task}_{args.session}_dialogue_{provider_suffix}.json"
-    )
-    if not in_path.exists():
-        raise FileNotFoundError(f"Input not found: {in_path}")
-    from annotation.annotate_results import load_turns
-
-    turns = load_turns(in_path)
-    annotations = annotate(turns, provider=args.provider, model=args.model)
-    updated_turns = apply_dialogue_acts(turns, annotations)
-    out_path.write_text(
-        json.dumps(updated_turns, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    print(f"Wrote: {out_path}")
+    turns, stem = load_input_turns(args)
+    updated = apply_dialogue_acts(turns, annotate(turns, model=args.model))
+    write_output(updated, stem, "dialogue_acts")
 
 
 if __name__ == "__main__":

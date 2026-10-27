@@ -1,66 +1,82 @@
-"""Load coaching sessions as a Hugging Face dataset, one row per turn.
+"""Load DigitalCoach sessions from the Hugging Face Hub.
 
-Local placeholder sessions live in ``data/sessions``. Set ``DIGITAL_COACH_DATASET``
-to a Hub dataset id to load a published corpus instead. This module does not upload data.
+The Hub dataset stores one folder per human-human session:
+``<task>/<session>/{meta.json, turns.json, screen.mp4}``. Files are cached by
+``huggingface_hub``, so repeated loads do not re-download.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
-from digital_coach.paths import sessions_dir
-from digital_coach.schema import read_session
+from huggingface_hub import hf_hub_download, snapshot_download
 
-
-def iter_turn_rows(root: Path | None = None) -> Iterator[dict[str, Any]]:
-    base = root or sessions_dir()
-    if not base.is_dir():
-        return
-    for session_path in sorted(p for p in base.iterdir() if p.is_dir()):
-        if not (session_path / "meta.json").is_file() or not (session_path / "turns.json").is_file():
-            continue
-        meta, turns = read_session(session_path)
-        participants = meta.get("participants") or {}
-        model = meta.get("model") or {}
-        for turn in turns:
-            if not isinstance(turn, dict):
-                continue
-            yield {
-                "session_id": str(meta.get("session_id") or session_path.name),
-                "source": str(meta.get("source") or ""),
-                "task": str(meta.get("task") or ""),
-                "software": str(meta.get("software") or ""),
-                "coach_id": str(participants.get("coach_id") or ""),
-                "learner_id": str(participants.get("learner_id") or ""),
-                "coach_type": str(participants.get("coach_type") or ""),
-                "model_provider": str(model.get("provider") or ""),
-                "model_name": str(model.get("model") or ""),
-                "call_id": str(meta.get("call_id") or ""),
-                "turn_id": int(turn.get("turn_id") or 0),
-                "start": str(turn.get("start") or ""),
-                "end": "" if turn.get("end") in (None, "") else str(turn.get("end")),
-                "speaker": str(turn.get("speaker") or ""),
-                "text": str(turn.get("text") or ""),
-                "dialogue_acts": [str(x) for x in (turn.get("dialogue_acts") or [])],
-                "coaching_methods": [str(x) for x in (turn.get("coaching_methods") or [])],
-            }
+DEFAULT_DATASET = "berkeley-hci/digital-coach"
 
 
-def load_sessions(dataset_id: str | None = None, sessions_path: Path | None = None):
-    """Return a ``datasets.Dataset``.
+def dataset_id() -> str:
+    return (os.getenv("DIGITAL_COACH_DATASET") or DEFAULT_DATASET).strip()
 
-    Pass a Hub id, or set ``DIGITAL_COACH_DATASET``. Otherwise rows are built from
-    ``data/sessions`` (or ``sessions_path``).
+
+def _download(filename: str) -> Path:
+    return Path(hf_hub_download(dataset_id(), filename, repo_type="dataset"))
+
+
+def _read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_session(task: str, session: str, *, with_video: bool = False) -> dict[str, Any]:
+    """Return ``{"meta", "turns", "video_path"}`` for one session.
+
+    ``video_path`` is ``None`` unless ``with_video`` is set; the screen recording is large.
     """
-    from datasets import Dataset, load_dataset
+    meta = _read_json(_download(f"{task}/{session}/meta.json"))
+    turns = _read_json(_download(f"{task}/{session}/turns.json"))
+    meta.setdefault("source", "human-human")
+    video_path = _download(f"{task}/{session}/screen.mp4") if with_video else None
+    return {"meta": meta, "turns": turns, "video_path": video_path}
 
-    hub_id = (dataset_id or os.getenv("DIGITAL_COACH_DATASET") or "").strip()
-    if hub_id:
-        loaded = load_dataset(hub_id)
-        if hasattr(loaded, "keys") and "train" in loaded:
-            return loaded["train"]
-        return loaded
-    rows = list(iter_turn_rows(sessions_path))
-    return Dataset.from_list(rows)
+
+def load_sessions() -> list[dict[str, Any]]:
+    """Download every session's metadata and turns (no video)."""
+    root = Path(
+        snapshot_download(
+            dataset_id(),
+            repo_type="dataset",
+            allow_patterns=["*/*/meta.json", "*/*/turns.json"],
+        )
+    )
+    sessions = []
+    for meta_path in sorted(root.glob("*/*/meta.json")):
+        turns_path = meta_path.with_name("turns.json")
+        if not turns_path.is_file():
+            continue
+        meta = _read_json(meta_path)
+        meta.setdefault("source", "human-human")
+        sessions.append({"meta": meta, "turns": _read_json(turns_path), "video_path": None})
+    return sessions
+
+
+def load_turns() -> list[dict[str, Any]]:
+    """One row per turn across all sessions, with session fields repeated."""
+    rows = []
+    for session in load_sessions():
+        meta = session["meta"]
+        participants = meta.get("participants") or {}
+        for turn in session["turns"]:
+            rows.append(
+                {
+                    "task": meta.get("task"),
+                    "session": meta.get("session"),
+                    "software": meta.get("software"),
+                    "source": meta.get("source"),
+                    "coach_id": participants.get("coach_id"),
+                    "learner_id": participants.get("learner_id"),
+                    **turn,
+                }
+            )
+    return rows

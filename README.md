@@ -37,22 +37,22 @@
 ---
 
 ```bash
-pip install -e .
+pip install -e ".[eval]"
 ```
 
 The two core operations — **load** a session, **score** a coach utterance:
 
 ```bash
-# Load human–human and human–AI turns in one schema
-python -c "from digital_coach.dataset import load_sessions; print(load_sessions())"
+# Load one human–human session from Hugging Face (meta + turns; video on request)
+python -c "from digital_coach.dataset import load_session; print(load_session('0101', 'C1L1')['meta'])"
 
-# Preview an input ablation (text only, no screen video required)
-python eval/eval_session.py -s hh_0101_example --vlm-input-modality text-only --dry-run
+# Preview an input ablation (text only, no screen video downloaded)
+python eval/eval_session.py -t 0101 -s C1L1 --vlm-input-modality text-only --dry-run
 ```
 
 > **Same schema for both sides.** A session is `meta.json` + `turns.json`. `source` is `human-human` or `human-ai`. Coach turns carry `dialogue_acts` and `coaching_methods`.
 
-Full recordings stay out of git. Set `DIGITAL_COACH_DATASET=berkeley-hci/digital-coach` to load the released corpus from Hugging Face instead of `data/sessions`.
+There is no local data folder. Sessions are downloaded from [`berkeley-hci/digital-coach`](https://huggingface.co/datasets/berkeley-hci/digital-coach) and cached by `huggingface_hub`.
 
 ## What it is
 
@@ -67,26 +67,30 @@ This repo is the code behind that comparison:
 
 ## Data
 
-Human–human folders (`DigitalCoach/<task>/<session>/`) and human–AI exports (`transcript` JSON) both become:
+The released corpus is 72 human–human sessions on Hugging Face, one folder per session:
 
 ```text
-data/sessions/<session_id>/
-  meta.json
-  turns.json
+berkeley-hci/digital-coach
+  <task>/<session>/
+    meta.json
+    turns.json
+    screen.mp4
 ```
 
-`meta.json` records `session_id`, `source`, `task`, `software`, and `participants` (`coach_id`, `learner_id`, `coach_type` of `human` or `model`). A model coach also stores `model.provider` (`openrouter`) and `model.model`.
+`meta.json` records `task`, `session`, `software`, and `participants` (`coach_id`, `learner_id`). Each turn is `{turn_id, start, end, speaker, text, dialogue_acts, coaching_methods}`. `speaker` is `Coach` or `Learner`.
 
-Each turn is `{turn_id, start, end, speaker, text, dialogue_acts, coaching_methods}`. `end` may be null for a live session. `speaker` is `Coach` or `Learner`.
-
-Two short examples are committed: `hh_0101_example` and `hai_0101_example`.
+Human–AI sessions come from the prototype. When a call ends it writes the same two files to `results/sessions/<task>/<call_id>/`, with `source: human-ai`, `participants.coach_type: model`, and the OpenRouter `model`. `end` is null for live turns.
 
 ```python
-from digital_coach.dataset import load_sessions
+from digital_coach.dataset import load_session, load_sessions, load_turns
 
-local = load_sessions()  # data/sessions, one row per turn
-hub = load_sessions("berkeley-hci/digital-coach")
+one = load_session("0101", "C1L1")                    # {"meta", "turns", "video_path": None}
+one = load_session("0101", "C1L1", with_video=True)   # also downloads screen.mp4
+every = load_sessions()                               # all 72 sessions, no video
+rows = load_turns()                                   # one row per turn, session fields repeated
 ```
+
+Set `DIGITAL_COACH_DATASET` to load a fork or mirror of the dataset.
 
 ## Eval
 
@@ -96,7 +100,7 @@ Input ablations change what the generator sees before that score:
 
 | Flag | Values | What changes |
 | --- | --- | --- |
-| `--vlm-input-modality` | `text-only`, `text-image`, `image-only`, `text-video` | Transcript, frames, or video |
+| `--vlm-input-modality` | `text-only`, `text-image`, `image-only` | Transcript, frames, or both |
 | `--vlm-context-seconds` | `1`, `10`, `30`, `60` | How much of the session precedes the coach turn |
 | `--vlm-prompt-style` | `default`, `teacher`, `oracle` | System prompt. `oracle` reveals the human coaching method |
 
@@ -104,13 +108,16 @@ Input ablations change what the generator sees before that score:
 cp .env.example .env   # set OPENROUTER_API_KEY
 
 python eval/eval_session.py \
-  -s hh_0101_example \
+  -t 0101 -s C1L1 \
   --vlm-input-modality text-image \
   --vlm-context-seconds 30 \
   --vlm-prompt-style oracle
+
+# CLAIR against the human coach turns of the same session
+python eval/eval_results.py results/eval/0101/C1L1/*.json
 ```
 
-Image and video conditions need `screen.mp4` in the session folder (or `media/`). Text-only does not. Generations land in `results/eval/<session_id>/`.
+`text-image` and `image-only` download the session's `screen.mp4`; `text-only` does not. Generations land in `results/eval/<task>/<session>/`. `eval_results.py` pairs each generated turn with the human coach turn by `turn_id`, scores it, and reports the mean overall and per coaching method.
 
 ## Annotation
 
@@ -120,7 +127,12 @@ Coach and learner turns are labeled with dialogue acts. Coach turns are also lab
 
 **Coaching methods.** Direct Instruction, Plan, Confirmation, Diagnosis, Explanation, Tip, Clarification, Reflection, Articulation, Exploration, Non-Instructive.
 
-Definitions and examples live in [`annotation/dialogue_acts.py`](annotation/dialogue_acts.py) and [`annotation/coaching_methods.py`](annotation/coaching_methods.py).
+```bash
+python annotation/dialogue_acts.py -t 0101 -s C1L1
+python annotation/coaching_methods.py --input results/sessions/0101/<call_id>/turns.json
+```
+
+Both call OpenRouter (`OPENROUTER_MODEL`) and write to `results/annotation/`. Definitions and examples live in [`annotation/dialogue_acts.py`](annotation/dialogue_acts.py) and [`annotation/coaching_methods.py`](annotation/coaching_methods.py).
 
 ## Prototype
 
