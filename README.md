@@ -2,7 +2,12 @@
   <img src="docs/assets/banner.svg" alt="DigitalCoach — Communication and Grounding Gaps in Human and Agentic Computer Use Coaching" width="100%">
 </p>
 <p align="center">
-  Official codebase for <b><a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a></b>
+<b>
+  <a href="https://arxiv.org/abs/2606.31980">DigitalCoach: Communication and Grounding Gaps in Human and Agentic Computer Use Coaching</a>
+</b>
+</p>
+<p align="center">
+<b>EMNLP 2026 <span style="color: red; font-style: italic;">(Oral)</span></b>
 </p>
 <p align="center">
   <a href="https://meng-chen.com">Meng Chen</a><sup>1</sup>,
@@ -15,9 +20,8 @@
 </p>
 <p align="center">
   <sub><sup>1</sup>UC Berkeley &nbsp; <sup>2</sup>TU Munich &nbsp; <sup>†</sup>Equal supervision</sub><br>
-  <sub>EMNLP 2026 (Oral, 2.5%)</sub>
 </p>
-<p align="center">Study coaching by what people <em>say and do</em> on the screen, not the transcript alone.</p>
+<p align="center">Evaluating VLMs on real-time, long-horizon computer use task teaching.</p>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2606.31980"><img src="https://img.shields.io/badge/arXiv-2606.31980-b31b1b" alt="arXiv"></a>
@@ -28,7 +32,6 @@
 
 <p align="center">
   <a href="#what-it-is">What it is</a> &middot;
-  <a href="#data">Data</a> &middot;
   <a href="#eval">Eval</a> &middot;
   <a href="#annotation">Annotation</a> &middot;
   <a href="#prototype">Prototype</a>
@@ -52,49 +55,19 @@ python eval/eval_session.py -t 0101 -s C1L1 --vlm-input-modality text-only --dry
 
 > **Same schema for both sides.** A session is `meta.json` + `turns.json`. `source` is `human-human` or `human-ai`. Coach turns carry `dialogue_acts` and `coaching_methods`.
 
-There is no local data folder. Sessions are downloaded from [`berkeley-hci/digital-coach`](https://huggingface.co/datasets/berkeley-hci/digital-coach) and cached by `huggingface_hub`.
+Sessions load from [`berkeley-hci/digital-coach`](https://huggingface.co/datasets/berkeley-hci/digital-coach) via `huggingface_hub`. Human–AI sessions from the prototype use the same files under `results/sessions/`.
 
 ## What it is
 
-DigitalCoach compares human coaches with model coaches on the same computer-use tasks (Figma, Blender, Onshape, FL Studio, Excel). Human coaches ground the next utterance in the learner’s screen. Model coaches often skip that grounding and give a direct instruction.
-
 This repo is the code behind that comparison:
 
-- one session format for recorded human coaching and live human–AI coaching
-- dialogue-act and coaching-method labels
+- dialogue act and coaching method annotation
 - CLAIR scoring of generated coach utterances, with input ablations
-- a realtime screen-share coach that calls models through OpenRouter
-
-## Data
-
-The released corpus is 72 human–human sessions on Hugging Face, one folder per session:
-
-```text
-berkeley-hci/digital-coach
-  <task>/<session>/
-    meta.json
-    turns.json
-    screen.mp4
-```
-
-`meta.json` records `task`, `session`, `software`, and `participants` (`coach_id`, `learner_id`). Each turn is `{turn_id, start, end, speaker, text, dialogue_acts, coaching_methods}`. `speaker` is `Coach` or `Learner`.
-
-Human–AI sessions come from the prototype. When a call ends it writes the same two files to `results/sessions/<task>/<call_id>/`, with `source: human-ai`, `participants.coach_type: model`, and the OpenRouter `model`. `end` is null for live turns.
-
-```python
-from digital_coach.dataset import load_session, load_sessions, load_turns
-
-one = load_session("0101", "C1L1")                    # {"meta", "turns", "video_path": None}
-one = load_session("0101", "C1L1", with_video=True)   # also downloads screen.mp4
-every = load_sessions()                               # all 72 sessions, no video
-rows = load_turns()                                   # one row per turn, session fields repeated
-```
-
-Set `DIGITAL_COACH_DATASET` to load a fork or mirror of the dataset.
+- a real-time web prototype for VLM coach that calls models through OpenRouter
 
 ## Eval
 
-CLAIR (Lin et al., EMNLP 2023) asks a judge model whether a generated coach utterance matches the human coach at the same moment. Scores are 0–100. The judge goes through OpenRouter (`OPENROUTER_API_KEY`).
+CLAIR (Chan et al., EMNLP 2023) asks an LLM judge (gpt-5.1) to evaluate the similarity between two utterances given the same multimodal input. Scores are 0–100. The judge goes through OpenRouter (`OPENROUTER_API_KEY`).
 
 Input ablations change what the generator sees before that score:
 
