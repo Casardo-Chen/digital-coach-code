@@ -21,7 +21,7 @@
 <p align="center">
   <sub><sup>1</sup>UC Berkeley &nbsp; <sup>2</sup>TU Munich &nbsp; <sup>†</sup>Equal supervision</sub><br>
 </p>
-<p align="center">Evaluating VLMs on real-time, long-horizon computer use task teaching.</p>
+<p align="center">Evaluating VLMs on real-time, long-horizon computer use task coaching</p>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2606.31980"><img src="https://img.shields.io/badge/arXiv-2606.31980-b31b1b" alt="arXiv"></a>
@@ -39,6 +39,8 @@
 
 ---
 
+## Quick Start
+
 ```bash
 pip install -e ".[eval]"
 ```
@@ -53,11 +55,9 @@ python -c "from digital_coach.dataset import load_session; print(load_session('0
 python eval/eval_session.py -t 0101 -s C1L1 --vlm-input-modality text-only --dry-run
 ```
 
-> **Same schema for both sides.** A session is `meta.json` + `turns.json`. `source` is `human-human` or `human-ai`. Coach turns carry `dialogue_acts` and `coaching_methods`.
-
 Sessions load from [`berkeley-hci/digital-coach`](https://huggingface.co/datasets/berkeley-hci/digital-coach) via `huggingface_hub`. Human–AI sessions from the prototype use the same files under `results/sessions/`.
 
-## What it is
+## What It Is
 
 This repo is the code behind that comparison:
 
