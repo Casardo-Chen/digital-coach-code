@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="DigitalCoach — Communication and Grounding Gaps in Human and Agentic Computer Use Coaching" width="100%">
+  <img src="docs/assets/banner.png" alt="DigitalCoach — Communication and Grounding Gaps in Human and Agentic Computer Use Coaching" width="100%">
 </p>
 <p align="center">
 <b>
