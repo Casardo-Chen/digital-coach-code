@@ -25,7 +25,7 @@
 
 <p align="center">
   <a href="https://arxiv.org/abs/2606.31980"><img src="https://img.shields.io/badge/arXiv-2606.31980-b31b1b" alt="arXiv"></a>
-  <a href="https://arxiv.org/abs/2606.31980"><img src="https://img.shields.io/badge/EMNLP-2026%20Oral-111111" alt="EMNLP 2026"></a>
+  <a href="https://aclanthology.org/2026.emnlp-main.770/"><img src="https://img.shields.io/badge/EMNLP-2026%20Oral-111111" alt="EMNLP 2026"></a>
   <a href="https://huggingface.co/datasets/berkeley-hci/digital-coach"><img src="https://img.shields.io/badge/data-Hugging%20Face-ff9d00" alt="Hugging Face dataset"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
 </p>
